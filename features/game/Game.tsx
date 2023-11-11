@@ -1,0 +1,194 @@
+import React, { useState } from "react";
+import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import {
+    Button,
+    StyleSheet,
+    Text,
+    useWindowDimensions,
+    View,
+} from "react-native";
+import Animated, {
+    Easing,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+    useAnimatedGestureHandler,
+    withRepeat,
+    withSequence,
+    BounceIn,
+    SharedValue,
+} from "react-native-reanimated";
+import {
+    GestureHandlerRootView,
+    PanGestureHandler,
+} from "react-native-gesture-handler";
+import { AnimatedStyle } from "react-native-reanimated/lib/types/lib/reanimated2/commonTypes";
+import circle from '../../public/Circle.jpg'
+
+
+
+// Engine consts
+const fps = 60;
+const delta = 1000 / fps;
+
+// Physics consts
+const speed = 20;
+const ballWidth = 25;
+const gravityConst = 6.674 * Math.pow(10, -11);
+const ballMass = 0.1;
+const earthMass = 5.98 * Math.pow(10, 24);
+const gravity = gravityConst * ballMass * earthMass; //gravity must be divided by distance squared
+const resilence = 0.9;
+
+
+const normalizeVector = (vector: { x: number, y: number }) => {
+    const magnitude = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+    return {
+        x: vector.x / magnitude,
+        y: vector.y / magnitude,
+    };
+};
+
+
+export default function Game() {
+    const { height, width } = useWindowDimensions();
+    // const [balls, setBalls] = useState<Array<{ targetPositionX: SharedValue<number>, targetPositionY: SharedValue<number>, direction: SharedValue<{ x: number, y: number }>, animation: AnimatedStyle } | any>>([]);
+    const balls: Array<any> = [];
+
+
+    for (let i = 0; i < 5; i++) {
+        const targetPositionX = useSharedValue(Math.random() * width);
+        const targetPositionY = useSharedValue(Math.random() * height);
+        const direction = useSharedValue(
+            normalizeVector({ x: Math.random(), y: Math.random() })
+        );
+        const ballAnimatedStyles = useAnimatedStyle(() => {
+            return {
+                top: targetPositionY.value,
+                left: targetPositionX.value,
+            };
+        });
+        const ball = { targetPositionX, targetPositionY, direction, ballAnimatedStyles, i }
+        balls.push(ball);
+    }
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            for (let i = 0; i < balls.length; i++) {
+                update(balls[i])
+            }
+        }, delta);
+
+        return () => clearInterval(interval);
+    }, []);
+
+    const update = (ball: any) => {
+
+        let nextPos = getNextPos(ball.targetPositionX, ball.targetPositionY, ball.direction.value);
+        let newDirection = ball.direction.value;
+
+
+        if (balls.length > 1) {
+            for (let i = 0; i < balls.length; i++) {
+                let collidedBall = null;
+                if (balls[i] != ball) {
+                    // console.log(balls[i])
+                    const dx = ball.targetPositionX.value - balls[i].targetPositionX.value;
+                    const dy = ball.targetPositionY.value - balls[i].targetPositionY.value;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    const colliding = distance < ballWidth;
+                    if (colliding) {
+                        // const resilenceNormalized = normalizeVector({ x: resilence, y: resilence });
+                        // giving new direction to current ball
+                        collidedBall = balls[i];
+                        newDirection = { x: balls[i].direction.value.x, y: balls[i].direction.value.y };
+
+                    }
+                }
+            }
+        }
+
+        // Detekcja kolizji ze ścianą
+        // Oś x
+        if (nextPos.x < 0 || nextPos.x > width - ballWidth) {
+            newDirection = { x: -resilence * ball.direction.value.x, y: ball.direction.value.y };
+        }
+
+        // Oś y
+        if (nextPos.y < 0 || nextPos.y > height - ballWidth) {
+            // console.log(ball.direction.value.y);
+            // ball.direction.value.y = - resilence * ball.direction.value.y;
+            // console.log(ball.direction.value.y);
+            newDirection = { x: ball.direction.value.x, y: - resilence * ball.direction.value.y };
+        }
+        // else {
+        //     newDirection.y += 1;
+        // }
+        // newDirection.y += 1;
+
+
+
+        ball.direction.value = newDirection;
+        nextPos = getNextPos(ball.targetPositionX, ball.targetPositionY, newDirection);
+
+        ball.targetPositionX.value = withTiming(nextPos.x, {
+            duration: delta,
+            easing: Easing.linear,
+        });
+        ball.targetPositionY.value = withTiming(nextPos.y, {
+            duration: delta,
+            easing: Easing.linear,
+        });
+
+    }
+
+
+    const getNextPos = (targetPositionX: SharedValue<number>, targetPositionY: SharedValue<number>, direction: { x: number, y: number }) => {
+        return {
+            x: targetPositionX.value + direction.x * speed,
+            // y: targetPositionY.value + (direction.y + gravity) * speed,
+            y: targetPositionY.value + direction.y * speed,
+            // + (gravity / Math.pow((height - targetPositionX.value - ballWidth), 2))
+        };
+    };
+
+
+
+    return (
+        <View style={styles.container}>
+
+
+
+            {balls.map((ball) => {
+                return (
+                    // <GaussianBlur image={
+                    //     <ColorMatrix image={
+                    //         <Animated.Image ref={ball} source={circle} key={ball.i} style={[{ backgroundColor: Math.floor(Math.random() * 10) % 2 ? "chartreuse" : "cyan" }, styles.ball, ball.ballAnimatedStyles]} />
+                    //     } matrix={[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 15, -4]} />} />
+
+                    <Animated.Image ref={ball} source={circle} key={ball.i} style={[{ backgroundColor: Math.floor(Math.random() * 10) % 2 ? "chartreuse" : "cyan" }, styles.ball, ball.ballAnimatedStyles]} />
+                    // <Animated.View key={ball.i} style={[{ backgroundColor: Math.floor(Math.random() * 10) % 2 ? "chartreuse" : "cyan" }, styles.ball, ball.ballAnimatedStyles]} />
+
+                )
+            })}
+        </View >
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        width: "100%",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    ball: {
+        width: ballWidth,
+        height: ballWidth,
+        aspectRatio: 1,
+        borderRadius: 25,
+        position: "absolute",
+    },
+});
